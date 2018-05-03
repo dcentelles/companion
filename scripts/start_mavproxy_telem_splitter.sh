@@ -4,8 +4,10 @@
 
 # For PixHawk or other connected via USB on Raspberry Pi
 cd /home/pi
+#mavproxy.py --master=/dev/ttyAMA0,57600 \ #FOR TELEM 2 (PIXHAWK) SERIAL PORT (NO USB)
 mavproxy.py --master=/dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00,115200 \
             --source-system=200 \
             --cmd="set heartbeat 0" \
             --out udpin:localhost:9000 \
-            --out udpbcast:192.168.2.255:14550
+	    --out udpbcast:192.168.1.255:14550
+#            --out udpbcast:192.168.42.255:14550

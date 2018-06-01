@@ -2,11 +2,34 @@
 
 <script src="socket.io-file-client.js"></script> 
 <script>
+var _updating = false;
 var socket = io();
+
+// Listen to internet connectivity status updates from the backend
+// Disable features that require backend internet connectivity when
+// there is no connection
+socket.on('internet status', function(data) {
+	console.log('got internet status', data);
+	if(_updating) {
+		return; // Don't enable buttons until update is complete
+	}
+	enableInternetUpdates(data);
+});
+
+// Listen to RAM and CPU usage stats
+socket.on('cpu stats', function(data) {
+	console.log('got cpu status', data);
+});
+
 socket.on('terminal output', function(data) {
-	var currentHTML = document.getElementById("terminal-output").innerHTML;
-	document.getElementById("terminal-output").innerHTML = currentHTML + data;
-	document.getElementById("terminal-output").scrollTop = document.getElementById("terminal-output").scrollHeight
+	var terminalEl = document.getElementById("terminal-output");
+	var html = terminalEl.innerHTML + data;
+	var autoscroll = terminalEl.scrollHeight - terminalEl.scrollTop
+		=== terminalEl.clientHeight;
+	terminalEl.innerHTML = html.replace(/\n.*?\r/g, "\n");
+	if (autoscroll) {
+		terminalEl.scrollTop = terminalEl.scrollHeight;
+	}
 });
 
 socket.on('companion version', function(data) {
@@ -26,26 +49,15 @@ function updateCompanion(fileInfo) {
 		uploader.off('complete', updateCompanion);
 		socket.emit('update companion', fileInfo.name);
 	} else {
-		disableUpdates(true);
-		showCompanionSpinner(true);
 		socket.emit('update companion');
 	}
+	_updating = true;
+	enableUpdates(false);
+	showCompanionSpinner(true);
 }
 
 function companionProgress(fileInfo) {
-	document.getElementById('companionProgress').innerHTML = `Uploading: ${fileInfo.sent} / ${fileInfo.size} byte(s)`;
-}
-
-function updatePixhawkDev() {
-	updatePixhawk('dev');
-}
-
-function updatePixhawkBeta() {
-	updatePixhawk('beta');
-}
-
-function updatePixhawkStable() {
-	updatePixhawk('stable');
+	document.getElementById('companionProgress').innerHTML = 'Uploading: ' + fileInfo.sent + '/' + fileInfo.size + ' byte(s)';
 }
 
 function updatePixhawkFile(fileInfo) {
@@ -59,7 +71,8 @@ function updatePixhawkFile(fileInfo) {
 }
 
 function updatePixhawk(option) {
-	disableUpdates(true);
+	_updating = true;
+	enableUpdates(false);
 	showPixhawkSpinner(true);
 	socket.emit('update pixhawk', {
 		'option' : option
@@ -67,26 +80,32 @@ function updatePixhawk(option) {
 }
 
 function pixhawkProgress(fileInfo) {
-	document.getElementById('pixhawkProgress').innerHTML = `Uploading: ${fileInfo.sent} / ${fileInfo.size} byte(s)`;
+	document.getElementById('pixhawkProgress').innerHTML = 'Uploading: ' + fileInfo.sent + '/' + fileInfo.size + ' byte(s)';
 }
 
 socket.on('pixhawk update complete', function(data) {
-	disableUpdates(false);
+	_updating = false;
+	enableUpdates(true);
 	showPixhawkSpinner(false);
 });
 
 socket.on('companion update complete', function(data) {
+	_updating = false;
+	enableUpdates(true);
 	showCompanionSpinner(false);
-	setInterval(location.reload(true), 3000);
 });
 
-function disableUpdates(disabled) {
-	document.getElementById('companionButton').disabled = disabled;
-	document.getElementById('devButton').disabled = disabled;
-	document.getElementById('betaButton').disabled = disabled;
-	document.getElementById('stableButton').disabled = disabled;
-	document.getElementById('pixhawkFileButton').disabled = disabled;
-	document.getElementById('companionFileButton').disabled = disabled;
+function enableInternetUpdates(enabled) {
+	document.getElementById('companionButton').disabled = !enabled;
+	document.getElementById('devButton').disabled = !enabled;
+	document.getElementById('betaButton').disabled = !enabled;
+	document.getElementById('stableButton').disabled = !enabled;
+}
+
+function enableUpdates(enabled) {
+	enableInternetUpdates(enabled);
+	document.getElementById('pixhawkFileButton').disabled = !enabled;
+	document.getElementById('companionFileButton').disabled = !enabled;
 }
 
 function showCompanionSpinner(show) {
@@ -113,7 +132,7 @@ uploader.on('complete', function(fileInfo) {
 });
 uploader.on('error', function(err) {
 	console.log('Error!', err);
-	disableUpdates(false);
+	enableUpdates(true);
 	showPixhawkSpinner(false);
 	showCompanionSpinner(false);
 	
@@ -127,8 +146,6 @@ uploader.on('abort', function(fileInfo) {
 	console.log('Aborted: ', fileInfo);
 });
 
-var form = document.getElementById('form');
-
 function submit(onComplete, onStream, fileElement) {
 	var fileEl = document.getElementById(fileElement);
 	var uploadIds = uploader.upload(fileEl);
@@ -139,7 +156,7 @@ function submit(onComplete, onStream, fileElement) {
 		return false;
 	}
 	
-	disableUpdates(true);
+	enableUpdates(false);
 	if (fileElement == 'pixhawkFile') {
 		showPixhawkSpinner(true);
 	} else {
@@ -148,22 +165,112 @@ function submit(onComplete, onStream, fileElement) {
 	
 	uploader.on('complete', onComplete);
 	uploader.on('stream', onStream);
-	
-	// setTimeout(function() { 
-		// uploader.abort(uploadIds[0]); 
-		// console.log(uploader.getUploadInfo()); 
-	// }, 1000); 
 };
+
+// Set width of all "dynamic-parent-width" elements to parent width
+function resizeDynamicWidthElement() {
+    var elements = document.getElementsByClassName("dynamic-parent-width");
+    for (i=0; i<elements.length; i++) {
+        elements[i].style.width = elements[i].parentElement.clientWidth + "px";
+    }
+}
+
+// Create event listener to dynamically resize elements when page is resized
+window.addEventListener('resize', resizeDynamicWidthElement);
+
+window.addEventListener("DOMContentLoaded", function() {
+	resizeDynamicWidthElement();
+});
+
+function restoreFw() {
+	if (confirm("Are you sure you want to reset ArduSub firmware to "
+		+ "factory default?")) {
+		document.getElementById('restore fw').disabled = true;
+		socket.emit('restore px fw');
+	}
+}
+
+function restoreParams() {
+	if (confirm("Are you sure you want to reset ArduSub parameters to "
+		+ "factory default?")) {
+		document.getElementById('restore params').disabled = true;
+		socket.emit('restore px params');
+	}
+}
+
+function rebootPixhawk() {
+	if (confirm("Are you sure you want to reboot the Pixhawk ?")) {
+		document.getElementById('reboot pixhawk').disabled = true;
+		socket.emit('reboot px');
+	}
+}
+
+socket.on('restore px fw complete', function(data){
+	document.getElementById('restore fw').disabled = false;
+});
+
+socket.on('restore px params complete', function(data){
+	document.getElementById('restore params').disabled = false;
+});
+
+socket.on('reboot px complete', function(data){
+	document.getElementById('reboot pixhawk').disabled = false;
+});
+
+// Listen to RAM and CPU usage stats
+socket.on('cpu stats', function(data) {
+	// make cpu load display with one decimal point if less than 10.
+	var _cpu_load;
+	if (Math.abs(data.cpu_load) < 10) {
+		_cpu_load = data.cpu_load.toFixed(1);
+	} else {
+		_cpu_load = data.cpu_load.toFixed(0);
+	}
+
+	// display data
+	document.getElementById('cpuLoad').innerHTML = _cpu_load + '%';
+	document.getElementById('ramFree').innerHTML = data.ram_free.toFixed(3) + ' MB';
+	document.getElementById('ramUsed').innerHTML = data.ram_used.toFixed(3) + ' MB';
+	document.getElementById('ramTotal').innerHTML = data.ram_total.toFixed(3) + ' MB';
+	document.getElementById('cpuStatus').innerHTML = data.cpu_status;
+});
+
 </script>
 
 <h1>Software Status and Update</h1>
+<!-- Companion Computer Status -->
+<div class="row">
+	<div class="col-md-12">
+		<div class="panel panel-default">
+			<div class="panel-heading">
+				<h3 class="panel-title">
+					Companion Computer Status
+				</h3>
+			</div>
+			<div class="panel-body">
+				<dl class="dl-horizontal">
+					<dt>CPU Load: </dt>
+						<dd id="cpuLoad"></dd>
+					<dt>Free RAM: </dt>
+						<dd id="ramFree"></dd>
+					<dt>Used RAM: </dt>
+						<dd id="ramUsed"></dd>
+					<dt>Total RAM: </dt>
+						<dd id="ramTotal"></dd>
+					<dt>CPU Status: </dt>
+						<dd id="cpuStatus"></dd>
+				</dl>
+			</div>
+		</div>
+	</div>
+</div>
 
 <div class="row">
 	<div class="col-md-12">
 		<div class="panel panel-default">
 			<div class="panel-heading">
 				<h3 class="panel-title">
-					ArduSub Companion Status
+					Companion Software Status
 					<i id="companionSpinner" class="fa fa-refresh fa-spin fa-2x fa-fw" style="visibility:hidden;"></i>
 					<span id="companionProgress"></span>
 				</h3>
@@ -173,7 +280,7 @@ function submit(onComplete, onStream, fileElement) {
 				<span id="companion version">Companion Version</span>
 				<div>
 					<h4 id="companionAvailable">Download Update: No Updates Available</h4>
-					<button id="companionButton" type="button" class="btn btn-primary" onclick="updateCompanion()" style="display:none">Update</button>
+					<button id="companionButton" type="button" class="btn btn-primary" onclick="updateCompanion()" style="display:none" disabled=true>Update</button>
 				</div>
 				<div>
 					<h4>Upload Zipped Update:</h4>
@@ -198,18 +305,33 @@ function submit(onComplete, onStream, fileElement) {
 			<div class="panel-body">
 				<div>
 					<h4>Download and Update (Requires Internet Connection):</h4>
-					<button id="devButton" type="button" class="btn btn-primary" onclick="updatePixhawkDev()">Development</button>
-					<button id="betaButton" type="button" class="btn btn-primary" onclick="updatePixhawkBeta()">Beta</button>
-					<button id="stableButton" type="button" class="btn btn-primary" onclick="updatePixhawkStable()">Stable</button>
+					<button id="devButton" type="button" class="btn btn-primary" onclick="updatePixhawk('dev')" disabled=true>Development</button>
+					<button id="betaButton" type="button" class="btn btn-primary" onclick="updatePixhawk('beta')" disabled=true>Beta</button>
+					<button id="stableButton" type="button" class="btn btn-primary" onclick="updatePixhawk('stable')" disabled=true>Stable</button>
 				</div>
 				<div>
 					<h4>Upload Firmware File:</h4>
 					<input id="pixhawkFileButton" type="submit" class="btn btn-primary" value="Upload" onClick="submit(updatePixhawkFile, pixhawkProgress, 'pixhawkFile')" style="display:table-cell"/>
 					<input type="file" id="pixhawkFile" style="display:table-cell" enabled/>
+
+					<h4>Restore Factory Defaults</h4>
+					<button type="button" class="btn btn-primary"
+						id="restore fw" onclick="restoreFw()">
+						Restore Default Firmware</button>
+					<button type="button" class="btn btn-primary"
+						id="restore params" onclick="restoreParams()">
+						Restore Default Parameters</button>
+
+					<h4>Reboot Pixhawk</h4>
+					<button type="button" class="btn btn-primary"
+						id="reboot pixhawk" onclick="rebootPixhawk()">
+						🔃</button>
 				</div>
 				<br />
 				<div>
-				<textarea rows="20" cols="120" id="terminal-output" style="font-family:monospace"></textarea>
+				<textarea rows="20" cols="120" id="terminal-output"
+					style="font-family:monospace; resize: vertical"
+					class="dynamic-parent-width" readonly></textarea>
 				</div>
 			</div>
 		</div>

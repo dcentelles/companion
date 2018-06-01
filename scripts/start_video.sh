@@ -21,6 +21,10 @@ if ! lsmod | grep -q bcm2835_v4l2; then
     sudo modprobe bcm2835-v4l2
 fi
 
+#comment the line below to not rotate the image
+v4l2-ctl --set-ctrl vertical_flip=1
+v4l2-ctl --set-ctrl horizontal_flip=1
+
 screen -X -S video quit
 
 # check if this device is H264 capable before streaming

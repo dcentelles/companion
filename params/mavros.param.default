@@ -1,0 +1,5 @@
+--wait
+mavros
+apm.launch
+fcu_url:=udp://localhost:14550@
+gcs_url:=udp-b://@192.168.1.255:14550

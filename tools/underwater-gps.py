@@ -17,7 +17,7 @@ parser.add_argument('--ip', action="store", type=str, default="demo.waterlinked.
 parser.add_argument('--port', action="store", type=str, default="80", help="remote port to query on.")
 args = parser.parse_args()
 
-
+system('screen -S mavproxy -p 0 -X stuff "param set GPS_TYPE 14^M"')
 connected = False
 while not connected:
     time.sleep(5)
@@ -25,8 +25,6 @@ while not connected:
     connected = not system('curl ' + args.ip + ':' + args.port + '/api/v1/about/')
 
 print("Found Water Linked underwater GPS!")
-
-system('screen -S mavproxy -p 0 -X stuff "param set GPS_TYPE 14^M"')
 
 sockit = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sockit.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

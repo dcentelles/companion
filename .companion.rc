@@ -17,6 +17,16 @@ if [ ! -f /home/pi/.updating ]; then
 	if [[ $ROS_CAMERA = true ]]
 	then
 		sudo -H -u pi screen -dm -S roscamera $COMPANION_DIR/scripts/start_roscamera.sh
+		if [[ $VISION = true ]]
+		then
+			sudo -H -u pi screen -dm -S aruco_mapping $COMPANION_DIR/scripts/start_aruco_mapping.sh
+		fi
+		if [[ $DEBT = true ]]
+		then
+			sudo -H -u pi screen -dm -S debt $COMPANION_DIR/scripts/start_debt.sh
+		fi
+
+	
 	else
 		sudo -H -u pi $COMPANION_DIR/scripts/start_video.sh $(cat /home/pi/vidformat.param)
 	fi

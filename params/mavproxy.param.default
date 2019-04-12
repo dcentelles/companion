@@ -1,10 +1,4 @@
---master=/dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00,115200
---load-module='GPSInput,DepthOutput'
---source-system=200
---cmd="set heartbeat 0"
---out udpin:localhost:9000
---out udp:localhost:14550
---out udpbcast:192.168.2.255:14551
---mav20
---aircraft telemetry
---streamrate -1
+--wait
+mavros
+apm.launch
+fcu_url:=udp://localhost:14551@
